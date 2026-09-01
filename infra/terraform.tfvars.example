@@ -1,0 +1,23 @@
+# Yandex Cloud settings
+cloud_id  = "your-cloud-id"
+folder_id = "your-folder-id"
+
+# VM settings
+zone               = "ru-central1-a"
+image_family       = "ubuntu-2404-lts"
+platform_id        = "standard-v1"
+cores              = 2
+memory             = 2
+core_fraction      = 20
+disk_type          = "network-hdd"
+disk_size          = 20
+nat                = true
+storage_bucket_name = "your-unique-bucket-name"
+
+# SSH public key content (not file path)
+ssh_key = "ssh-ed25519 AAAA... user@host"
+
+# Linux user on VM (same as REMOTE_USER in GitHub Secrets)
+vm_ssh_login = "ubuntu"
+
+sa_key_file = "authorized_key.json"

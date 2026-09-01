@@ -1,0 +1,89 @@
+name: Terraform
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Select the Terraform action
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_cloud_id: ${{ secrets.YC_CLOUD_ID }}
+      TF_VAR_folder_id: ${{ secrets.YC_FOLDER_ID }}
+      TF_VAR_ssh_key: ${{ secrets.SSH_PUBLIC_KEY }}
+      TF_VAR_storage_bucket_name: ${{ secrets.YC_STORAGE_BUCKET_NAME }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify required secrets
+        env:
+          ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          SA_KEY: ${{ secrets.YC_SERVICE_ACCOUNT_KEY_FILE }}
+          YC_CLOUD_ID: ${{ secrets.YC_CLOUD_ID }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+          SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          err() { echo "::error::$1"; exit 1; }
+          [ -n "${ACCESS_KEY}" ] && [ -n "${SECRET_KEY}" ] || err "Set ACCESS_KEY and SECRET_KEY secrets."
+          [ -n "${SA_KEY}" ] || err "Set YC_SERVICE_ACCOUNT_KEY_FILE secret."
+          [ -n "${YC_CLOUD_ID}" ] || err "Set YC_CLOUD_ID secret."
+          [ -n "${YC_FOLDER_ID}" ] || err "Set YC_FOLDER_ID secret."
+          [ -n "${SSH_PUBLIC_KEY}" ] || err "Set SSH_PUBLIC_KEY secret."
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Prepare service account key
+        working-directory: ./infra
+        env:
+          SA_KEY: ${{ secrets.YC_SERVICE_ACCOUNT_KEY_FILE }}
+        run: python3 prepare_sa_key.py
+
+      - name: Terraform Init
+        working-directory: ./infra
+        run: |
+          terraform init -input=false \
+            -backend-config="access_key=${ACCESS_KEY}" \
+            -backend-config="secret_key=${SECRET_KEY}" \
+            -backend-config="bucket=${TF_STATE_BUCKET}"
+        env:
+          ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          TF_STATE_BUCKET: ${{ secrets.YC_TFSTATE_BUCKET }}
+
+      - name: Terraform Plan
+        working-directory: ./infra
+        if: github.event.inputs.action == 'plan'
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        working-directory: ./infra
+        if: github.event.inputs.action == 'apply'
+        run: terraform apply -input=false -auto-approve
+
+      - name: Print VM IP and SSH user
+        working-directory: ./infra
+        if: github.event.inputs.action == 'apply'
+        run: |
+          terraform output -no-color vm_external_ip
+          terraform output -no-color vm_ssh_login
+
+      - name: Terraform Destroy
+        working-directory: ./infra
+        if: github.event.inputs.action == 'destroy'
+        run: terraform destroy -input=false -auto-approve
