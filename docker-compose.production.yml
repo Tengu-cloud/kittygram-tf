@@ -39,7 +39,9 @@ services:
     image: ${DOCKER_USERNAME}/kittygram_frontend:latest
     container_name: frontend
     volumes:
-      - frontend_dist:/app/build
+      - frontend_dist:/static
+    command: >
+      bash -c "cp -r /app/build/. /static/ && tail -f /dev/null"
     restart: always
 
   gateway:
