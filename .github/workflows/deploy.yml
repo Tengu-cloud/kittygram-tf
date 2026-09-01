@@ -178,30 +178,73 @@ jobs:
       - name: Deploy on server
         run: |
           ssh kittygram-deploy << 'EOF'
+            set -x
             cd ~/kittygram/
+
             if [ ! -f /swapfile ]; then
-              sudo fallocate -l 2G /swapfile
+              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
               sudo chmod 600 /swapfile
               sudo mkswap /swapfile
               sudo swapon /swapfile
               echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
             fi
+
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             sudo docker compose -f docker-compose.production.yml pull
             sudo docker compose -f docker-compose.production.yml down
+
             sudo docker compose -f docker-compose.production.yml up -d postgres
             echo "Waiting for postgres..."
             for i in $(seq 1 30); do
               sudo docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${{ secrets.POSTGRES_USER }}" -d "${{ secrets.POSTGRES_DB }}" && break
               sleep 2
             done
-            sudo docker compose -f docker-compose.production.yml run --rm backend python manage.py migrate
+
+            set +e
+            MIGRATE_CODE=1
+            for attempt in 1 2 3; do
+              sudo docker compose -f docker-compose.production.yml run --rm backend python manage.py migrate
+              MIGRATE_CODE=$?
+              if [ "$MIGRATE_CODE" -eq 0 ]; then
+                break
+              fi
+              echo "Migrate attempt ${attempt} failed, retrying..."
+              sleep 5
+            done
+
             sudo docker compose -f docker-compose.production.yml run --rm backend python manage.py collectstatic --noinput
+            COLLECT_CODE=$?
+            set -e
+
             sudo docker compose -f docker-compose.production.yml up -d --force-recreate
             echo "Waiting for services..."
-            sleep 20
+            sleep 25
+
             sudo docker compose -f docker-compose.production.yml ps
-            sudo docker compose -f docker-compose.production.yml logs backend --tail 30
+            sudo docker compose -f docker-compose.production.yml logs backend --tail 20
+            sudo docker compose -f docker-compose.production.yml logs gateway --tail 10
+
+            RUNNING=$(sudo docker compose -f docker-compose.production.yml ps --status running --services | wc -l)
+            if [ "$RUNNING" -lt 4 ]; then
+              echo "Expected 4 running containers, got ${RUNNING}"
+              exit 1
+            fi
+
+            if ! curl -sf -o /dev/null http://localhost:9000/; then
+              echo "Gateway health check failed"
+              sudo docker compose -f docker-compose.production.yml logs gateway --tail 30
+              exit 1
+            fi
+
+            if [ "$MIGRATE_CODE" -ne 0 ]; then
+              echo "Migrate failed with code ${MIGRATE_CODE}"
+              exit 1
+            fi
+
+            if [ "$COLLECT_CODE" -ne 0 ]; then
+              echo "Collectstatic failed with code ${COLLECT_CODE}"
+              exit 1
+            fi
           EOF
 
   notify:
