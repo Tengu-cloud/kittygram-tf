@@ -79,6 +79,12 @@ variable "image_family" {
   default     = "ubuntu-2404-lts"
 }
 
+variable "network_name" {
+  description = "Existing VPC network name to use"
+  type        = string
+  default     = "default"
+}
+
 variable "storage_bucket_name" {
   description = "Unique name for the Object Storage bucket"
   type        = string

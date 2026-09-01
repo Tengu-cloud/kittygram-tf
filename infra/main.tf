@@ -2,9 +2,8 @@ data "yandex_compute_image" "ubuntu" {
   family = var.image_family
 }
 
-resource "yandex_vpc_network" "kittygram_network" {
-  name        = "kittygram-network"
-  description = "Network for Kittygram application"
+data "yandex_vpc_network" "kittygram_network" {
+  name = var.network_name
 }
 
 resource "yandex_vpc_subnet" "kittygram_subnet" {
