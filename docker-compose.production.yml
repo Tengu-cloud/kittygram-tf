@@ -47,6 +47,7 @@ services:
   gateway:
     image: ${DOCKER_USERNAME}/kittygram_gateway:latest
     container_name: gateway
+    entrypoint: ["nginx", "-g", "daemon off;"]
     ports:
       - "9000:80"
     volumes:
