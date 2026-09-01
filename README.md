@@ -212,15 +212,5 @@ kittygram-final/
 4. Добавить `REMOTE_HOST`, `ALLOWED_HOSTS`, обновить `tests.yml`
 5. Push в `main` — автоматический деплой Kittygram
 
-## Чек-лист
-
-- [x] Workflow Terraform (plan / apply / destroy)
-- [x] Workflow деплоя Kittygram
-- [x] Cloud-init (Docker + Docker Compose)
-- [x] Security Group (22, 9000)
-- [x] Kittygram доступен по ссылке из `tests.yml`
-- [x] Файл `kittygram_workflow.yml` в корне репозитория
-
 ---
 
-> Проект выполнен в рамках курса «DevOps-инженер облачных сервисов» (Yandex Practicum).
