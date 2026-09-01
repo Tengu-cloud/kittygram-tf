@@ -32,6 +32,11 @@ runcmd:
   - usermod -aG docker ${ssh_username}
   - mkdir -p /home/${ssh_username}/kittygram/nginx
   - chown -R ${ssh_username}:${ssh_username} /home/${ssh_username}/kittygram
+  - fallocate -l 2G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=2048
+  - chmod 600 /swapfile
+  - mkswap /swapfile
+  - swapon /swapfile
+  - echo '/swapfile none swap sw 0 0' >> /etc/fstab
 
 power_state:
   mode: reboot

@@ -9,12 +9,18 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   backend:
     image: ${DOCKER_USERNAME}/kittygram_backend:latest
     container_name: backend
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -27,9 +33,7 @@ services:
       - media:/app/media
     restart: always
     command: >
-      bash -c "python manage.py migrate &&
-               python manage.py collectstatic --noinput &&
-               gunicorn kittygram_backend.wsgi:application --bind 0.0.0.0:8000"
+      gunicorn kittygram_backend.wsgi:application --bind 0.0.0.0:8000
 
   frontend:
     image: ${DOCKER_USERNAME}/kittygram_frontend:latest

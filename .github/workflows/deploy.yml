@@ -139,6 +139,17 @@ jobs:
           echo "DEBUG=${{ secrets.DEBUG }}" >> .env
           echo "ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}" >> .env
           echo "DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}" >> .env
+      - name: Verify deploy secrets
+        env:
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_SSH_KEY: ${{ secrets.REMOTE_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          err() { echo "::error::$1"; exit 1; }
+          [ -n "${REMOTE_HOST}" ] || err "Set REMOTE_HOST secret (VM IP from terraform output)."
+          [ -n "${REMOTE_USER}" ] || err "Set REMOTE_USER secret (usually ubuntu)."
+          [ -n "${REMOTE_SSH_KEY}" ] || err "Set REMOTE_SSH_KEY secret (private SSH key)."
       - name: Set up SSH
         env:
           REMOTE_SSH_KEY: ${{ secrets.REMOTE_SSH_KEY }}
@@ -168,13 +179,29 @@ jobs:
         run: |
           ssh kittygram-deploy << 'EOF'
             cd ~/kittygram/
+            if [ ! -f /swapfile ]; then
+              sudo fallocate -l 2G /swapfile
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+            fi
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             sudo docker compose -f docker-compose.production.yml pull
             sudo docker compose -f docker-compose.production.yml down
+            sudo docker compose -f docker-compose.production.yml up -d postgres
+            echo "Waiting for postgres..."
+            for i in $(seq 1 30); do
+              sudo docker compose -f docker-compose.production.yml exec -T postgres pg_isready -U "${{ secrets.POSTGRES_USER }}" -d "${{ secrets.POSTGRES_DB }}" && break
+              sleep 2
+            done
+            sudo docker compose -f docker-compose.production.yml run --rm backend python manage.py migrate
+            sudo docker compose -f docker-compose.production.yml run --rm backend python manage.py collectstatic --noinput
             sudo docker compose -f docker-compose.production.yml up -d --force-recreate
-            sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py migrate
-            sudo docker compose -f docker-compose.production.yml exec -T backend python manage.py collectstatic --noinput
+            echo "Waiting for services..."
+            sleep 20
             sudo docker compose -f docker-compose.production.yml ps
+            sudo docker compose -f docker-compose.production.yml logs backend --tail 30
           EOF
 
   notify:

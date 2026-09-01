@@ -58,7 +58,7 @@ variable "cores" {
 variable "memory" {
   description = "RAM in GiB"
   type        = number
-  default     = 2
+  default     = 4
 }
 
 variable "core_fraction" {
